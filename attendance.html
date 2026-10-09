@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Attendance{% endblock %}
+{% block page_title %}Attendance Management{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h6 mb-3"><i class="fas fa-calendar-plus me-2"></i>Record Attendance</h2>
+        <form id="attendanceForm">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="visually-hidden" for="attStudent">Select student</label>
+                    <select class="form-select form-select-sm" id="attStudent" required>
+                        <option value="">Select Student</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="visually-hidden" for="attDate">Attendance date</label>
+                    <input type="date" class="form-control form-control-sm" id="attDate" required>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="attSemester" required>
+                        <option value="one">Semester One</option>
+                        <option value="two">Semester Two</option>
+                        <option value="three">Semester Three</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="attStatus">
+                        <option value="present">Present</option>
+                        <option value="absent">Absent</option>
+                        <option value="late">Late</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary btn-sm w-100" id="recordAttendanceButton">Record</button>
+                </div>
+                <div class="col-12"><label class="visually-hidden" for="attRemarks">Remarks</label><input class="form-control form-control-sm" id="attRemarks" maxlength="200" placeholder="Optional remarks"></div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between">
+        <h2 class="h6 mb-0"><i class="fas fa-list me-2"></i>Attendance Records</h2>
+        <div class="d-flex flex-wrap gap-2">
+            <select id="filterSemester" class="form-select form-select-sm" aria-label="Filter by semester" style="width:160px;">
+                <option value="">All semesters</option>
+                <option value="one">Semester One</option>
+                <option value="two">Semester Two</option>
+                <option value="three">Semester Three</option>
+            </select>
+            <input type="date" id="filterDate" class="form-control form-control-sm" aria-label="Filter by date" style="width:160px;">
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th scope="col">ID</th><th scope="col">Student</th><th scope="col">Date</th><th scope="col">Semester</th><th scope="col">Status</th></tr>
+            </thead>
+            <tbody id="attendanceTable"><tr><td colspan="5" class="text-center text-muted py-4">Loading attendance records...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('attDate').valueAsDate = new Date();
+
+    async function loadAttendanceStudents() {
+        const select = document.getElementById('attStudent');
+        try {
+            const students = await fetchJson('/api/attendance/students');
+            students.forEach(student => {
+                const option = document.createElement('option');
+                option.value = student.student_id;
+                const group = [student.grade, student.section].filter(Boolean).join('-');
+                option.textContent = group
+                    ? `${student.full_name} · ${group}`
+                    : student.full_name;
+                select.appendChild(option);
+            });
+            if (!students.length) {
+                select.disabled = true;
+                document.getElementById('recordAttendanceButton').disabled = true;
+                showToast('Add student records before recording attendance.', 'warning');
+            }
+        } catch (error) {
+            select.disabled = true;
+            document.getElementById('recordAttendanceButton').disabled = true;
+            showRequestError(error, 'Could not load student list');
+        }
+    }
+
+    async function loadAttendance() {
+        const filterDate = document.getElementById('filterDate').value;
+        const params = new URLSearchParams();
+        const semester = document.getElementById('filterSemester').value;
+        if (semester) params.set('semester', semester);
+        if (filterDate) params.set('date', filterDate);
+        const query = params.toString();
+        const url = '/api/attendance' + (query ? `?${query}` : '');
+        const tbody = document.getElementById('attendanceTable');
+        try {
+            const records = await fetchJson(url);
+            if (!records.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No records match these filters.</td></tr>';
+                return;
+            }
+            const statusClass = { present: 'success', absent: 'danger', late: 'warning' };
+            const semesterLabels = {
+                one: 'Semester One', two: 'Semester Two', three: 'Semester Three'
+            };
+            tbody.innerHTML = records.map(record => `
+                <tr>
+                    <td>${record.attendance_id}</td>
+                    <td>${escapeHtml(record.student_name)}</td>
+                    <td>${escapeHtml(record.date)}</td>
+                    <td>${escapeHtml(semesterLabels[record.semester] || record.semester)}</td>
+                    <td><span class="badge text-bg-${statusClass[record.status] || 'secondary'}">${escapeHtml(record.status)}</span></td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Could not load attendance records. Check your connection and retry.</td></tr>';
+            showRequestError(error, 'Could not load attendance');
+        }
+    }
+
+    document.getElementById('attendanceForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const studentId = Number(document.getElementById('attStudent').value);
+        if (!Number.isInteger(studentId) || studentId <= 0) {
+            showToast('Select a student before recording attendance.', 'warning');
+            return;
+        }
+        const data = {
+            student_id: studentId,
+            date: document.getElementById('attDate').value,
+            semester: document.getElementById('attSemester').value,
+            status: document.getElementById('attStatus').value,
+            remarks: document.getElementById('attRemarks').value,
+        };
+        const button = document.getElementById('recordAttendanceButton');
+        button.disabled = true;
+        try {
+            const result = await fetchJson('/api/attendance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!result.success) throw new Error(result.message || 'Attendance was not saved.');
+            showToast('Attendance recorded', 'success');
+            document.getElementById('attRemarks').value = '';
+            await loadAttendance();
+        } catch (error) {
+            showRequestError(error, 'Could not record attendance');
+        } finally {
+            button.disabled = false;
+        }
+    });
+
+    document.getElementById('filterDate').addEventListener('change', loadAttendance);
+    document.getElementById('filterSemester').addEventListener('change', loadAttendance);
+    loadAttendanceStudents();
+    loadAttendance();
+</script>
+{% endblock %}

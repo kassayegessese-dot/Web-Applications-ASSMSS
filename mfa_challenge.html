@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Authenticator verification - {{ app_name }}</title>
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body class="auth-page">
+    <main class="auth-card">
+        <h1 class="h3">Verify your sign-in</h1>
+        <p>Enter the current six-digit code from your authenticator app.</p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }}" role="alert">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="code" class="form-label">Authenticator code</label>
+            <input id="code" name="code" class="form-control mb-3" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus>
+            <button class="btn btn-primary w-100" type="submit">Verify and sign in</button>
+        </form>
+    </main>
+</body>
+</html>

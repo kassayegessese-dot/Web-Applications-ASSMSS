@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block page_title %}User Management{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h6 class="mb-3"><i class="fas fa-user-plus me-2"></i>Create User</h6>
+        <form id="userForm">
+            <div class="row g-2">
+                <div class="col-md-2"><input class="form-control form-control-sm" id="uFullName" placeholder="Full name" maxlength="120"></div>
+                <div class="col-md-2"><input type="email" class="form-control form-control-sm" id="uEmail" placeholder="Email" maxlength="120"></div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="uBatch" required>
+                        <option value="" selected disabled>Select batch</option>
+                        {% for batch in batch_options %}
+                        <option value="{{ batch }}">{{ batch }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="uRole">
+                        <option value="Admin">Admin</option>
+                        <option value="Teacher">Teacher</option>
+                        <option value="Student">Student</option>
+                        <option value="Parent">Parent</option>
+                    </select>
+                </div>
+                <div class="col-md-3" id="studentIdField" hidden>
+                    <select class="form-select form-select-sm" id="uStudentId" disabled>
+                        <option value="">Select existing student ID</option>
+                    </select>
+                </div>
+                <div class="col-md-2"><input type="password" class="form-control form-control-sm" id="uPassword" placeholder="Password (8+ chars) *" minlength="8" maxlength="128" required></div>
+                <div class="col-md-2"><button class="btn btn-primary btn-sm w-100">Create</button></div>
+            </div>
+            <div class="form-text mt-2">Student accounts use their linked school ID. Admin, Teacher, and Parent accounts receive role-prefixed IDs.</div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h6 mb-1">Parent–student links</h2>
+        <p class="small text-muted">Only administrators can create these links. Parents can view linked students' attendance and exam results, but not fee details.</p>
+        <form id="parentLinkForm" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label for="linkParent" class="form-label">Parent account</label>
+                <select id="linkParent" class="form-select" required><option value="">Select parent</option></select>
+            </div>
+            <div class="col-md-4">
+                <label for="linkStudent" class="form-label">Student</label>
+                <select id="linkStudent" class="form-select" required><option value="">Select student</option></select>
+            </div>
+            <div class="col-md-3"><button class="btn btn-primary" type="submit">Link student</button></div>
+        </form>
+        <div id="parentLinksList" class="mt-3" aria-live="polite">Loading parent links...</div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white"><h6 class="mb-0"><i class="fas fa-users me-2"></i>All Users</h6></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">User #</th>
+                    <th scope="col">Account ID</th>
+                    <th scope="col">Full Name</th>
+                    <th scope="col">Student ID</th>
+                    <th scope="col">Batch</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="usersTable"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadUsers() {
+        const res = await fetch('/api/users');
+        const users = await res.json();
+        const tbody = document.getElementById('usersTable');
+        if (!users.length) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No users.</td></tr>';
+        } else tbody.innerHTML = users.map(u => `
+            <tr>
+                <td>${u.id}</td>
+                <td>${escapeHtml(u.username)}</td>
+                <td>${escapeHtml(u.full_name || '-')}</td>
+                <td>${escapeHtml(u.student_id || '-')}</td>
+                <td>${escapeHtml(u.batch || '-')}</td>
+                <td><span class="badge bg-primary">${escapeHtml(u.role)}</span></td>
+                <td><span class="badge ${u.approval_status === 'pending' ? 'bg-warning text-dark' : (u.is_active ? 'bg-success' : 'bg-secondary')}">${escapeHtml(u.approval_status === 'pending' ? 'Pending approval' : (u.is_active ? 'Active' : 'Inactive'))}</span></td>
+                <td>${escapeHtml(u.email || '-')}</td>
+                <td>
+                    <button class="btn btn-sm ${u.approval_status === 'pending' ? 'btn-outline-success' : 'btn-outline-secondary'}" onclick="toggleUser(${u.id}, ${u.is_active}, ${u.approval_status === 'pending'})">${u.approval_status === 'pending' ? 'Approve' : (u.is_active ? 'Deactivate' : 'Activate')}</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id})" aria-label="Delete account"><i class="fas fa-trash"></i></button>
+                    ${u.mfa_enabled ? `<button class="btn btn-sm btn-outline-warning" onclick="resetUserMfa(${u.id})">Reset MFA</button>` : ''}
+                </td>
+            </tr>
+        `).join('');
+        const parentSelect = document.getElementById('linkParent');
+        parentSelect.innerHTML = '<option value="">Select parent</option>' + users
+            .filter(user => user.role === 'Parent')
+            .map(user => `<option value="${user.id}">${escapeHtml(user.full_name || user.username)} (${escapeHtml(user.username)})</option>`)
+            .join('');
+    }
+
+    async function loadParentLinks() {
+        const wrapper = document.getElementById('parentLinksList');
+        const studentSelect = document.getElementById('linkStudent');
+        try {
+            const [links, students] = await Promise.all([
+                fetchJson('/api/parent-links'),
+                fetchJson('/api/students'),
+            ]);
+            studentSelect.innerHTML = '<option value="">Select student</option>' + students
+                .map(student => `<option value="${student.student_id}">${escapeHtml(student.full_name)} · Grade ${escapeHtml(student.grade || '—')}</option>`)
+                .join('');
+            const linked = links.flatMap(parent => parent.students.map(student => `
+                <span class="badge text-bg-light border me-1 mb-1">
+                    ${escapeHtml(parent.parent_name)} → ${escapeHtml(student.full_name)} (Grade ${escapeHtml(student.grade || '—')})
+                    <button type="button" class="btn-close ms-1" aria-label="Remove ${escapeHtml(parent.parent_name)} link to ${escapeHtml(student.full_name)}"
+                        onclick="removeParentLink(${parent.parent_user_id}, ${student.student_id})"></button>
+                </span>`));
+            wrapper.innerHTML = linked.length ? linked.join('') : '<span class="small text-muted">No parent–student links yet.</span>';
+        } catch (error) {
+            wrapper.textContent = 'Could not load parent links.';
+            showRequestError(error, 'Could not load parent links');
+        }
+    }
+
+    document.getElementById('parentLinkForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        try {
+            await fetchJson('/api/parent-links', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    parent_user_id: document.getElementById('linkParent').value,
+                    student_id: document.getElementById('linkStudent').value,
+                }),
+            });
+            showToast('Parent linked to student', 'success');
+            await loadParentLinks();
+        } catch (error) {
+            showRequestError(error, 'Could not create parent link');
+        }
+    });
+
+    async function removeParentLink(parentId, studentId) {
+        if (!confirm('Remove this parent–student link?')) return;
+        try {
+            await fetchJson(`/api/parent-links/${parentId}/${studentId}`, { method: 'DELETE' });
+            showToast('Parent link removed', 'success');
+            await loadParentLinks();
+        } catch (error) {
+            showRequestError(error, 'Could not remove parent link');
+        }
+    }
+
+    async function loadStudentsForLinking() {
+        const select = document.getElementById('uStudentId');
+        const [studentsResponse, usersResponse] = await Promise.all([
+            fetch('/api/students'),
+            fetch('/api/users'),
+        ]);
+        if (!studentsResponse.ok || !usersResponse.ok) {
+            throw new Error('Unable to load school student IDs.');
+        }
+        const [students, users] = await Promise.all([
+            studentsResponse.json(),
+            usersResponse.json(),
+        ]);
+        const linkedIds = new Set(
+            users.map(user => String(user.student_id)).filter(id => id !== 'null')
+        );
+        const availableStudents = students.filter(
+            student => !linkedIds.has(String(student.student_id))
+        );
+        select.innerHTML = '<option value="">Select existing student ID</option>' + availableStudents
+            .map(student => `<option value="${student.student_id}">${escapeHtml(student.student_id)} - ${escapeHtml(student.full_name)}</option>`)
+            .join('');
+        if (!availableStudents.length) {
+            select.options[0].textContent = 'No unlinked student IDs available';
+        }
+    }
+
+    const userRole = document.getElementById('uRole');
+    const studentIdField = document.getElementById('studentIdField');
+    const studentIdSelect = document.getElementById('uStudentId');
+    function updateStudentIdField() {
+        const isStudent = userRole.value === 'Student';
+        studentIdField.hidden = !isStudent;
+        studentIdSelect.disabled = !isStudent;
+        studentIdSelect.required = isStudent;
+    }
+    userRole.addEventListener('change', updateStudentIdField);
+    updateStudentIdField();
+
+    document.getElementById('userForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = {
+            full_name: document.getElementById('uFullName').value,
+            email: document.getElementById('uEmail').value,
+            batch: document.getElementById('uBatch').value,
+            role: document.getElementById('uRole').value,
+            student_id: document.getElementById('uRole').value === 'Student'
+                ? document.getElementById('uStudentId').value
+                : null,
+            password: document.getElementById('uPassword').value,
+        };
+        const res = await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.success) {
+            showToast(`User created. Username: ${result.user.username}`, 'success');
+            e.target.reset();
+            updateStudentIdField();
+            loadStudentsForLinking().catch(error => showToast(error.message, 'danger'));
+            loadUsers();
+            loadParentLinks();
+        } else {
+            showToast(result.message, 'danger');
+        }
+    });
+
+    async function toggleUser(id, isActive, isPending) {
+        if (!isPending && isActive && !confirm('Deactivate this account?')) return;
+        const response = await fetch(`/api/users/${id}/toggle`, { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+            showToast(isPending ? 'Account approved' : (result.active ? 'Account activated' : 'Account deactivated'), 'success');
+            loadUsers();
+        } else {
+            showToast(result.message || 'Unable to update account status', 'danger');
+        }
+
+        async function resetUserMfa(id) {
+            if (!confirm('Reset authenticator access for this account? The user will need to enroll again.')) return;
+            try {
+                await fetchJson(`/api/users/${id}/mfa-reset`, { method: 'POST' });
+                showToast('Authenticator access reset', 'success');
+                await loadUsers();
+            } catch (error) {
+                showRequestError(error, 'Could not reset authenticator access');
+            }
+        }
+    }
+
+    async function deleteUser(id) {
+        if (!confirm('Delete this user?')) return;
+        const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.success) {
+            showToast('User deleted', 'success');
+            loadUsers();
+            loadStudentsForLinking()
+                .then(updateStudentIdField)
+                .catch(error => showToast(error.message, 'danger'));
+        } else {
+            showToast(result.message, 'danger');
+        }
+    }
+
+    loadUsers();
+</script>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "public_base.html" %}
+{% block title %}{{ page.title }}{% endblock %}
+{% block description %}{{ page.title }} information for {{ school_name }}.{% endblock %}
+
+{% block content %}
+<section class="public-page-banner">
+    <div class="container">
+        <p class="public-eyebrow">{{ page.eyebrow }}</p>
+        <h1>{{ page.title }}</h1>
+        <p class="public-lead mb-0">{{ page.intro }}</p>
+    </div>
+</section>
+
+<section class="container public-page-content">
+    <div class="row g-4">
+        {% for item in news_items|default([]) %}
+        <div class="col-12">
+            <article class="public-content-card">
+                <h2>{{ item.title }}</h2>
+                {% if item.published_at %}<p class="small text-muted">{{ item.published_at.strftime('%B %d, %Y') }}</p>{% endif %}
+                <p class="mb-0 news-story">{{ item.body }}</p>
+            </article>
+        </div>
+        {% endfor %}
+        {% for section in page.sections %}
+        <div class="col-12">
+            <article class="public-content-card">
+                <h2>{{ section.title }}</h2>
+                <p class="mb-0">{{ section.body }}</p>
+                {% if section.phone or section.email %}
+                <address class="public-contact-links mt-3 mb-0">
+                    {% if section.phone %}
+                    <a href="tel:{{ section.phone }}"><i class="fas fa-phone me-2" aria-hidden="true"></i>{{ section.phone }}</a>
+                    {% endif %}
+                    {% if section.email %}
+                    <a href="mailto:{{ section.email }}"><i class="fas fa-envelope me-2" aria-hidden="true"></i>{{ section.email }}</a>
+                    {% endif %}
+                </address>
+                {% endif %}
+            </article>
+        </div>
+        {% endfor %}
+    </div>
+    {% if page.cta_endpoint %}
+    <div class="mt-4">
+        <a class="btn btn-primary btn-lg" href="{{ url_for(page.cta_endpoint) }}">{{ page.cta_label }}</a>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

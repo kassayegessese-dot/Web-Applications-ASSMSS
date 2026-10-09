@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Students{% endblock %}
+{% block page_title %}Students{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h6 mb-3"><i class="fas fa-user-plus me-2"></i>Add / Edit Student</h2>
+        <form id="studentForm">
+            <input type="hidden" id="studentId">
+            <div class="row g-2">
+                <div class="col-md-2"><input class="form-control form-control-sm" id="firstName" placeholder="First name *" required></div>
+                <div class="col-md-2"><input class="form-control form-control-sm" id="lastName" placeholder="Last name *" required></div>
+                <div class="col-md-1"><select class="form-select form-select-sm" id="gender"><option>Male</option><option>Female</option></select></div>
+                <div class="col-md-1">
+                    <input class="form-control form-control-sm" id="grade" list="gradeOptions" placeholder="Grade" aria-label="Student grade">
+                    <datalist id="gradeOptions">
+                        <option value="9" label="Grade 9"></option><option value="10" label="Grade 10"></option>
+                        <option value="11" label="Grade 11"></option><option value="12" label="Grade 12"></option>
+                    </datalist>
+                </div>
+                <div class="col-md-1"><input class="form-control form-control-sm" id="section" placeholder="Sec"></div>
+                <div class="col-md-2"><input class="form-control form-control-sm" id="phone" placeholder="Phone"></div>
+                <div class="col-md-3"><input class="form-control form-control-sm" id="email" type="email" placeholder="Email"></div>
+                <div class="col-md-3"><input class="form-control form-control-sm" id="parentName" placeholder="Parent name"></div>
+                <div class="col-md-2"><input class="form-control form-control-sm" id="parentPhone" placeholder="Parent phone"></div>
+                <div class="col-md-2"><input class="form-control form-control-sm" id="dob" type="date"></div>
+                <div class="col-md-5"><input class="form-control form-control-sm" id="address" placeholder="Address"></div>
+                <div class="col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm flex-fill">Save</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="resetStudent">Reset</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="fas fa-list me-2"></i>Student List</h6>
+        <div class="d-flex flex-wrap gap-2 student-list-filters">
+            <input type="search" id="studentSearch" class="form-control form-control-sm" placeholder="Search students by name or phone" aria-label="Search students">
+            <select id="gradeFilter" class="form-select form-select-sm" aria-label="Filter students by grade">
+                <option value="">All Grades</option>
+            </select>
+            <select id="semesterFilter" class="form-select form-select-sm" aria-label="GPA semester" style="width:170px;">
+                <option value="one">Semester One GPA</option>
+                <option value="two">Semester Two GPA</option>
+                <option value="three">Semester Three GPA</option>
+            </select>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">ID</th><th scope="col">Name</th><th scope="col">Gender</th><th scope="col">Grade</th>
+                    <th scope="col">Section</th><th scope="col">Phone</th><th scope="col">Semester GPA</th><th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="studentsTable">
+                <tr><td colspan="8" class="text-center text-muted py-4">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="modal fade" id="studentProfileModal" tabindex="-1" aria-labelledby="studentProfileTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="studentProfileTitle">Student profile</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="studentProfileBody"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const API = '/api/students';
+    let students = [];
+
+    async function loadStudents() {
+        const grade = document.getElementById('gradeFilter').value;
+        const search = document.getElementById('studentSearch').value;
+        const semester = document.getElementById('semesterFilter').value;
+        let url = API;
+        const params = new URLSearchParams();
+        params.append('semester', semester);
+        if (grade) params.append('grade', grade);
+        if (search) params.append('search', search);
+        if (params.toString()) url += '?' + params.toString();
+
+        try {
+            students = await fetchJson(url);
+            renderStudents();
+        } catch (error) {
+            document.getElementById('studentsTable').innerHTML =
+                '<tr><td colspan="8" class="text-center text-danger py-4">Could not load students. Check your connection and retry.</td></tr>';
+            showRequestError(error, 'Could not load students');
+        }
+    }
+
+    function renderStudents() {
+        const tbody = document.getElementById('studentsTable');
+        if (!students.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No students found.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = students.map(s => `
+            <tr>
+                <td>${s.student_id}</td>
+                <td>${escapeHtml(s.full_name)}</td>
+                <td>${escapeHtml(s.gender || '-')}</td>
+                <td>${escapeHtml(s.grade || '-')}</td>
+                <td>${escapeHtml(s.section || '-')}</td>
+                <td>${escapeHtml(s.phone || '-')}</td>
+                <td><span class="badge bg-info">${escapeHtml(s.letter_grade)}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-secondary" aria-label="View ${escapeHtml(s.full_name)}" onclick="viewStudent(${s.student_id})">
+                        <i class="fas fa-eye" aria-hidden="true"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editStudent(${s.student_id})">
+                        <i class="fas fa-edit" aria-hidden="true"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteStudent(${s.student_id})">
+                        <i class="fas fa-trash" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    document.getElementById('studentForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('studentId').value;
+        const data = {
+            first_name: document.getElementById('firstName').value,
+            last_name: document.getElementById('lastName').value,
+            gender: document.getElementById('gender').value,
+            grade: document.getElementById('grade').value,
+            section: document.getElementById('section').value,
+            phone: document.getElementById('phone').value,
+            email: document.getElementById('email').value,
+            parent_name: document.getElementById('parentName').value,
+            parent_phone: document.getElementById('parentPhone').value,
+            dob: document.getElementById('dob').value,
+            address: document.getElementById('address').value,
+        };
+        const url = id ? `${API}/${id}` : API;
+        const method = id ? 'PUT' : 'POST';
+        try {
+            const result = await fetchJson(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!result.success) throw new Error(result.message || 'The student was not saved.');
+            showToast(id ? 'Student updated successfully' : 'Student added successfully', 'success');
+            resetForm();
+            loadStudents();
+        } catch (error) {
+            showRequestError(error, id ? 'Could not update student' : 'Could not add student');
+        }
+    });
+
+    async function viewStudent(id) {
+        try {
+            const profile = await fetchJson(`${API}/${id}/profile`);
+            const student = profile.student;
+            document.getElementById('studentProfileTitle').textContent =
+                `${student.full_name} · Student profile`;
+            document.getElementById('studentProfileBody').innerHTML = `
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Student ID</dt><dd class="col-sm-8">${escapeHtml(student.student_id)}</dd>
+                    <dt class="col-sm-4">Grade / Section</dt><dd class="col-sm-8">${escapeHtml(student.grade || '—')} / ${escapeHtml(student.section || '—')}</dd>
+                    <dt class="col-sm-4">Gender</dt><dd class="col-sm-8">${escapeHtml(student.gender || '—')}</dd>
+                    <dt class="col-sm-4">Phone</dt><dd class="col-sm-8">${escapeHtml(student.phone || '—')}</dd>
+                    <dt class="col-sm-4">Email</dt><dd class="col-sm-8">${escapeHtml(student.email || '—')}</dd>
+                    <dt class="col-sm-4">Parent / guardian</dt><dd class="col-sm-8">${escapeHtml(student.parent_name || '—')}</dd>
+                    <dt class="col-sm-4">Attendance</dt><dd class="col-sm-8">${profile.attendance.total} records · ${profile.attendance.present} present · ${profile.attendance.absent} absent · ${profile.attendance.late} late</dd>
+                    <dt class="col-sm-4">Overall GPA</dt><dd class="col-sm-8">${escapeHtml(profile.gpa)} · ${escapeHtml(profile.letter_grade)}</dd>
+                </dl>`;
+            bootstrap.Modal.getOrCreateInstance(
+                document.getElementById('studentProfileModal')
+            ).show();
+        } catch (error) {
+            showRequestError(error, 'Could not load student profile');
+        }
+    }
+
+    function editStudent(id) {
+        const s = students.find(x => x.student_id === id);
+        if (!s) {
+            showToast('This student is no longer in the current list. Refresh and try again.', 'warning');
+            return;
+        }
+        document.getElementById('studentId').value = s.student_id;
+        document.getElementById('firstName').value = s.first_name;
+        document.getElementById('lastName').value = s.last_name;
+        document.getElementById('gender').value = s.gender || 'Male';
+        document.getElementById('grade').value = s.grade || '';
+        document.getElementById('section').value = s.section || '';
+        document.getElementById('phone').value = s.phone || '';
+        document.getElementById('email').value = s.email || '';
+        document.getElementById('parentName').value = s.parent_name || '';
+        document.getElementById('parentPhone').value = s.parent_phone || '';
+        document.getElementById('dob').value = s.dob || '';
+        document.getElementById('address').value = s.address || '';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function deleteStudent(id) {
+        if (!confirm('Are you sure you want to delete this student?')) return;
+        try {
+            const result = await fetchJson(`${API}/${id}`, { method: 'DELETE' });
+            if (!result.success) throw new Error(result.message || 'The student was not deleted.');
+            showToast('Student deleted', 'success');
+            loadStudents();
+        } catch (error) {
+            showRequestError(error, 'Could not delete student');
+        }
+    }
+
+    function resetForm() {
+        document.getElementById('studentForm').reset();
+        document.getElementById('studentId').value = '';
+    }
+
+    document.getElementById('resetStudent').addEventListener('click', resetForm);
+    document.getElementById('studentSearch').addEventListener('input', loadStudents);
+    document.getElementById('gradeFilter').addEventListener('change', loadStudents);
+    document.getElementById('semesterFilter').addEventListener('change', loadStudents);
+
+    async function initializeStudentFilters() {
+        const gradeFilter = document.getElementById('gradeFilter');
+        try {
+            const allStudents = await fetchJson(API);
+            const grades = [...new Set(allStudents.map(student => student.grade).filter(Boolean))]
+                .sort((first, second) => first.localeCompare(second, undefined, { numeric: true }));
+            grades.forEach(grade => {
+                const option = document.createElement('option');
+                option.value = grade;
+                option.textContent = `Grade ${grade}`;
+                gradeFilter.appendChild(option);
+            });
+            const requestedGrade = new URLSearchParams(window.location.search).get('grade');
+            if (requestedGrade && grades.includes(requestedGrade)) {
+                gradeFilter.value = requestedGrade;
+            }
+            await loadStudents();
+        } catch (error) {
+            document.getElementById('studentsTable').innerHTML =
+                '<tr><td colspan="8" class="text-center text-danger py-4">Could not load students. Check your connection and retry.</td></tr>';
+            showRequestError(error, 'Could not initialize student list');
+        }
+    }
+
+    initializeStudentFilters();
+</script>
+{% endblock %}

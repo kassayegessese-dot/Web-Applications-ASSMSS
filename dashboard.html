@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+{% block title %}
+    {% if current_user.role == 'Student' %}Student Portal
+    {% elif current_user.role == 'Parent' %}Parent Portal
+    {% elif current_user.role == 'Admin' %}Administrator Dashboard
+    {% else %}Teacher Dashboard{% endif %}
+{% endblock %}
+{% block page_title %}
+    {% if current_user.role == 'Student' %}Student Portal
+    {% elif current_user.role == 'Parent' %}Parent Portal
+    {% elif current_user.role == 'Admin' %}Administrator Dashboard
+    {% else %}Teacher Dashboard{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if stats %}
+{% if current_user.role == 'Admin' %}
+<div class="dashboard-heading mb-4">
+    <div>
+        <p class="dashboard-eyebrow mb-1">Administration</p>
+        <h1 class="h3 mb-1">Dashboard</h1>
+        <p class="text-muted mb-0">{{ school_name }} · {{ semester_label }}</p>
+    </div>
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label for="dashboardSemester" class="form-label mb-0">Semester</label>
+        <select id="dashboardSemester" name="semester" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for key, label in semesters.items() %}
+            <option value="{{ key }}" {% if semester == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+<div class="row g-3 mb-4 admin-dashboard-metrics">
+    <div class="col-md-4 col-sm-6">
+        <a class="stat-card dashboard-stat-link" href="{{ url_for('students_page') }}">
+            <div class="stat-icon blue"><i class="fas fa-user-graduate" aria-hidden="true"></i></div>
+            <div>
+                <div class="stat-value">{{ stats.students }}</div>
+                <div class="stat-label">Students</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 col-sm-6">
+        <a class="stat-card dashboard-stat-link" href="{{ url_for('teachers_page') }}">
+            <div class="stat-icon green"><i class="fas fa-chalkboard-teacher" aria-hidden="true"></i></div>
+            <div>
+                <div class="stat-value">{{ stats.teachers }}</div>
+                <div class="stat-label">Teachers</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 col-sm-6">
+        <a class="stat-card dashboard-stat-link" href="{{ url_for('classes_page') }}">
+            <div class="stat-icon purple"><i class="fas fa-layer-group" aria-hidden="true"></i></div>
+            <div>
+                <div class="stat-value">{{ stats.subjects }}</div>
+                <div class="stat-label">Subjects · Classes module</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-8">
+        <section class="card shadow-sm h-100" aria-labelledby="attendanceChartHeading">
+            <div class="card-body">
+                <div class="dashboard-panel-heading">
+                    <div>
+                        <h2 class="h6 mb-1" id="attendanceChartHeading">Attendance</h2>
+                        <p class="text-muted small mb-0">Daily records · last 7 days</p>
+                    </div>
+                    <a href="{{ url_for('attendance_page') }}" class="small">Manage attendance</a>
+                </div>
+                <div class="attendance-chart-legend" aria-hidden="true">
+                    <span><i class="attendance-legend-dot present"></i>Present</span>
+                    <span><i class="attendance-legend-dot absent"></i>Absent</span>
+                    <span><i class="attendance-legend-dot late"></i>Late</span>
+                </div>
+                <div class="attendance-chart" role="img" aria-label="Attendance records by status for the last seven days">
+                    {% for day in attendance_chart %}
+                    {% set day_total = day.present + day.absent + day.late %}
+                    <div class="attendance-chart-day" title="{{ day.date }}: {{ day.present }} present, {{ day.absent }} absent, {{ day.late }} late">
+                        <div class="attendance-chart-track">
+                            {% if day_total %}
+                            <div class="attendance-chart-stack">
+                                {% if day.present %}
+                                <span class="attendance-bar-segment present" style="height: {{ (day.present / attendance_chart_max * 100)|round(1) }}%"></span>
+                                {% endif %}
+                                {% if day.absent %}
+                                <span class="attendance-bar-segment absent" style="height: {{ (day.absent / attendance_chart_max * 100)|round(1) }}%"></span>
+                                {% endif %}
+                                {% if day.late %}
+                                <span class="attendance-bar-segment late" style="height: {{ (day.late / attendance_chart_max * 100)|round(1) }}%"></span>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="attendance-chart-empty" aria-hidden="true"></span>
+                            {% endif %}
+                        </div>
+                        <span class="attendance-chart-label">{{ day.label }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <p class="small text-muted mb-0">Chart totals reflect recorded attendance; blank days have no records.</p>
+            </div>
+        </section>
+    </div>
+    <div class="col-md-4">
+        <section class="card shadow-sm h-100" aria-labelledby="recentUsersHeading">
+            <div class="card-body">
+                <div class="dashboard-panel-heading">
+                    <h2 class="h6 mb-0" id="recentUsersHeading">Recent Users</h2>
+                    <a href="{{ url_for('users_page') }}" class="small">View all</a>
+                </div>
+                {% if recent_users %}
+                <ul class="dashboard-list">
+                    {% for user in recent_users %}
+                    <li>
+                        <span class="dashboard-list-icon"><i class="fas fa-user" aria-hidden="true"></i></span>
+                        <span class="dashboard-list-main">
+                            <strong>{{ user.full_name or user.username }}</strong>
+                            <small>{{ user.role }} · {{ user.username }}</small>
+                        </span>
+                        {% if user.approval_status == 'pending' %}
+                        <span class="badge text-bg-warning">Pending</span>
+                        {% elif user.is_active %}
+                        <span class="badge text-bg-success">Active</span>
+                        {% else %}
+                        <span class="badge text-bg-secondary">Inactive</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="dashboard-empty-state">No user accounts have been created yet.</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+    <div class="col-12">
+        <section class="card shadow-sm" aria-labelledby="recentActivitiesHeading">
+            <div class="card-body">
+                <div class="dashboard-panel-heading">
+                    <h2 class="h6 mb-0" id="recentActivitiesHeading">Recent Activities</h2>
+                    <span class="text-muted small">Latest recorded audit events</span>
+                </div>
+                {% if recent_activities %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr><th scope="col">Activity</th><th scope="col">User</th><th scope="col">Details</th><th scope="col">Date</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for activity in recent_activities %}
+                            <tr>
+                                <td><span class="badge text-bg-light">{{ activity.action }}</span></td>
+                                <td>{{ activity.user.full_name or activity.user.username if activity.user else 'System' }}</td>
+                                <td>{{ activity.details or '—' }}</td>
+                                <td>{{ activity.created_at.strftime('%Y-%m-%d %H:%M') if activity.created_at else '—' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="dashboard-empty-state">No audit activity has been recorded yet.</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</div>
+{% else %}
+<div class="dashboard-heading mb-4">
+    <div>
+        <p class="dashboard-eyebrow mb-1">Teaching</p>
+        <h1 class="h3 mb-1">Teaching overview</h1>
+        <p class="text-muted mb-0">{{ school_name }} · {{ semester_label }}</p>
+    </div>
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label for="dashboardSemester" class="form-label mb-0">Semester</label>
+        <select id="dashboardSemester" name="semester" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for key, label in semesters.items() %}
+            <option value="{{ key }}" {% if semester == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-user-graduate"></i></div>
+            <div>
+                <div class="stat-value">{{ stats.students }}</div>
+                <div class="stat-label">Students</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="fas fa-chalkboard-teacher"></i></div>
+            <div>
+                <div class="stat-value">{{ stats.teachers }}</div>
+                <div class="stat-label">Teachers</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-icon orange"><i class="fas fa-calendar-check"></i></div>
+            <div>
+                <div class="stat-value">{{ stats.semester_present }}</div>
+                <div class="stat-label">Present · {{ semester_label }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-icon orange"><i class="fas fa-pencil-alt"></i></div>
+            <div>
+                <div class="stat-value">{{ stats.semester_exams }}</div>
+                <div class="stat-label">Exams · {{ semester_label }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row g-3">
+    <div class="col-12">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h6 mb-3"><i class="fas fa-info-circle me-2"></i>System Overview</h2>
+                <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr><td>Total Subjects</td><td class="text-end"><strong>{{ stats.subjects }}</strong></td></tr>
+                        <tr><td>Total Books</td><td class="text-end"><strong>{{ stats.books }}</strong></td></tr>
+                        <tr><td>Present · {{ semester_label }}</td><td class="text-end"><span class="badge bg-success">{{ stats.semester_present }}</span></td></tr>
+                        <tr><td>Absent · {{ semester_label }}</td><td class="text-end"><span class="badge bg-danger">{{ stats.semester_absent }}</span></td></tr>
+                        <tr><td>Exams · {{ semester_label }}</td><td class="text-end"><strong>{{ stats.semester_exams }}</strong></td></tr>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% elif student_portal %}
+<div class="dashboard-heading mb-4">
+    <div>
+        <p class="dashboard-eyebrow mb-1">Student portal</p>
+        <h1 class="h3 mb-1">My learning</h1>
+        {% if student %}
+        <p class="text-muted mb-0">{{ school_name }} · Personal records for {{ semester_label }}</p>
+        {% else %}
+        <p class="text-muted mb-0">Your account is not linked to a student record yet. Contact the school administrator.</p>
+        {% endif %}
+    </div>
+    {% if student %}
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label for="dashboardSemester" class="form-label mb-0">Semester</label>
+        <select id="dashboardSemester" name="semester" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for key, label in semesters.items() %}
+            <option value="{{ key }}" {% if semester == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+    {% endif %}
+</div>
+{% if student %}
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-id-card"></i></div>
+            <div>
+                <div class="stat-value">{{ student.student_id }}</div>
+                <div class="stat-label">Your Student ID</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="fas fa-layer-group"></i></div>
+            <div>
+                <div class="stat-value">{{ student.grade or '—' }}{% if student.section %} · {{ student.section }}{% endif %}</div>
+                <div class="stat-label">Your class</div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row g-4">
+    <div class="col-lg-6">
+        <section class="card h-100" aria-labelledby="myAttendanceHeading">
+            <div class="card-header bg-white">
+                <h2 id="myAttendanceHeading" class="h6 mb-0"><i class="fas fa-calendar-check me-2"></i>My Attendance · {{ semester_label }}</h2>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light"><tr><th scope="col">Date</th><th scope="col">Status</th><th scope="col">Remarks</th></tr></thead>
+                    <tbody>
+                        {% for record in attendance_records %}
+                        <tr>
+                            <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ record.status|capitalize }}</td>
+                            <td>{{ record.remarks or '—' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No attendance records for this semester.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <div class="col-lg-6">
+        <section class="card h-100" aria-labelledby="myResultsHeading">
+            <div class="card-header bg-white">
+                <h2 id="myResultsHeading" class="h6 mb-0"><i class="fas fa-pencil-alt me-2"></i>My Exam Results · {{ semester_label }}</h2>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light"><tr><th scope="col">Subject</th><th scope="col">Score</th><th scope="col">Date</th></tr></thead>
+                    <tbody>
+                        {% for exam in exam_records %}
+                        <tr>
+                            <td>{{ exam.subject.subject_name if exam.subject else 'Subject unavailable' }}</td>
+                            <td>{{ exam.score|round(2) }} / {{ exam.max_score|round(2) }}</td>
+                            <td>{{ exam.exam_date.strftime('%Y-%m-%d') if exam.exam_date else '—' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No exam results for this semester.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endif %}
+{% elif parent_portal %}
+<div class="dashboard-heading mb-4">
+    <div>
+        <p class="dashboard-eyebrow mb-1">Parent portal</p>
+        <h1 class="h3 mb-1">Linked student records</h1>
+        <p class="text-muted mb-0">{{ school_name }} · {{ semester_label }}</p>
+    </div>
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label for="dashboardSemester" class="form-label mb-0">Semester</label>
+        <select id="dashboardSemester" name="semester" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for key, label in semesters.items() %}
+            <option value="{{ key }}" {% if semester == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+{% if parent_student_records %}
+{% for records in parent_student_records %}
+<section class="card shadow-sm mb-4" aria-labelledby="parentStudent{{ records.student.student_id }}">
+    <div class="card-header bg-white">
+        <h2 class="h5 mb-0" id="parentStudent{{ records.student.student_id }}">{{ records.student.full_name }}</h2>
+        <span class="small text-muted">Student ID {{ records.student.student_id }} · Grade {{ records.student.grade or '—' }}{% if records.student.section %} · Section {{ records.student.section }}{% endif %}</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <h3 class="h6">Recent attendance</h3>
+                <div class="table-responsive"><table class="table table-sm">
+                    <thead><tr><th>Date</th><th>Status</th></tr></thead>
+                    <tbody>{% for record in records.attendance %}<tr><td>{{ record.date.strftime('%Y-%m-%d') }}</td><td>{{ record.status|capitalize }}</td></tr>{% else %}<tr><td colspan="2" class="text-muted">No attendance records for this semester.</td></tr>{% endfor %}</tbody>
+                </table></div>
+            </div>
+            <div class="col-lg-6">
+                <h3 class="h6">Recent examination results</h3>
+                <div class="table-responsive"><table class="table table-sm">
+                    <thead><tr><th>Subject</th><th>Score</th></tr></thead>
+                    <tbody>{% for exam in records.exams %}<tr><td>{{ exam.subject.subject_name if exam.subject else 'Subject unavailable' }}</td><td>{{ exam.score|round(2) }} / {{ exam.max_score|round(2) }}</td></tr>{% else %}<tr><td colspan="2" class="text-muted">No exam results for this semester.</td></tr>{% endfor %}</tbody>
+                </table></div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endfor %}
+{% else %}
+<section class="portal-access-card card border-0 shadow-sm" aria-labelledby="parentAccessHeading">
+    <div class="card-body p-4 p-lg-5">
+        <span class="portal-access-icon" aria-hidden="true"><i class="fas fa-user-shield"></i></span>
+        <p class="dashboard-eyebrow mt-4 mb-2">{{ school_name }}</p>
+        <h1 id="parentAccessHeading" class="h3">Parent access</h1>
+        <p class="text-muted mb-0">No student records are linked to this Parent account yet. Contact the school administrator.</p>
+    </div>
+</section>
+{% endif %}
+{% else %}
+<section class="portal-access-card card border-0 shadow-sm" aria-labelledby="parentAccessHeading">
+    <div class="card-body p-4 p-lg-5">
+        <span class="portal-access-icon" aria-hidden="true"><i class="fas fa-user-shield"></i></span>
+        <p class="dashboard-eyebrow mt-4 mb-2">{{ school_name }}</p>
+        <h1 id="parentAccessHeading" class="h3">Account overview</h1>
+        <p class="text-muted mb-0">Your account is active. Contact your school administrator for access to your records and available services.</p>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

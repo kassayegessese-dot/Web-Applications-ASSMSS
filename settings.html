@@ -1,0 +1,403 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <header class="settings-hero mb-4">
+        <div class="settings-hero-copy">
+            <p class="settings-eyebrow"><i class="fas fa-sliders" aria-hidden="true"></i> Workspace preferences</p>
+            <h1>Settings</h1>
+            <p>Make your workspace yours. Manage your display preference and view your account and school information.</p>
+        </div>
+        <div class="settings-hero-art" aria-hidden="true">
+            <span class="settings-art-orbit settings-art-orbit-one"></span>
+            <span class="settings-art-orbit settings-art-orbit-two"></span>
+            <img src="{{ url_for('static', filename='images/aylota-logo.png') }}" alt="">
+        </div>
+    </header>
+
+    <div class="row g-4 align-items-stretch">
+        <div class="col-lg-7">
+            <section class="card settings-card h-100" aria-labelledby="appearanceHeading">
+                <div class="card-body p-4 p-xl-5">
+                    <div class="settings-section-heading">
+                        <span class="settings-icon"><i class="fas fa-palette" aria-hidden="true"></i></span>
+                        <div>
+                            <p class="settings-card-kicker">Personalize</p>
+                            <h2 id="appearanceHeading" class="h5 mb-1">Appearance</h2>
+                            <p class="text-muted mb-0">Choose how ASSMS looks on this device.</p>
+                        </div>
+                    </div>
+
+                    <div class="settings-theme-preview" aria-hidden="true">
+                        <div class="theme-preview theme-preview-light">
+                            <span class="theme-preview-sidebar"></span>
+                            <span class="theme-preview-content">
+                                <i></i><i></i><i></i>
+                            </span>
+                        </div>
+                        <div class="theme-preview theme-preview-dark">
+                            <span class="theme-preview-sidebar"></span>
+                            <span class="theme-preview-content">
+                                <i></i><i></i><i></i>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="settings-option settings-theme-option">
+                        <div class="settings-option-label">
+                            <span class="settings-option-symbol"><i class="fas fa-moon" aria-hidden="true"></i></span>
+                            <span>
+                                <label class="form-check-label fw-semibold" for="darkThemePreference">Dark theme</label>
+                                <span class="settings-option-caption">Reduce screen brightness with a darker color palette.</span>
+                            </span>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="darkThemePreference"
+                                   aria-label="Enable dark theme">
+                        </div>
+                    </div>
+                    <p class="settings-save-note mb-0">
+                        <i class="fas fa-circle-check" aria-hidden="true"></i>
+                        Your preference is saved in this browser.
+                    </p>
+                </div>
+            </section>
+        </div>
+
+        <div class="col-lg-5">
+            <section class="card settings-card account-card h-100" aria-labelledby="accountHeading">
+                <div class="card-body p-4 p-xl-5">
+                    <div class="settings-section-heading">
+                        <span class="settings-icon account-icon"><i class="fas fa-user-shield" aria-hidden="true"></i></span>
+                        <div>
+                            <p class="settings-card-kicker">Signed in</p>
+                            <h2 id="accountHeading" class="h5 mb-1">Your account</h2>
+                            <p class="text-muted mb-0">Current account and access level.</p>
+                        </div>
+                    </div>
+
+                    <div class="account-identity">
+                        <div class="account-avatar" aria-hidden="true">
+                            {{ (current_user.full_name or current_user.username)[:1]|upper }}
+                        </div>
+                        <div class="min-w-0">
+                            <h3 class="h6 mb-1 text-truncate">{{ current_user.full_name or current_user.username }}</h3>
+                            <p class="text-muted small mb-0">ID {{ current_user.username }}</p>
+                        </div>
+                        <span class="account-status"><i class="fas fa-circle" aria-hidden="true"></i> Active</span>
+                    </div>
+
+                    <div class="account-detail-list">
+                        <div class="account-detail">
+                            <span>Account type</span>
+                            <span class="badge rounded-pill account-role">{{ current_user.role }}</span>
+                        </div>
+                        <div class="account-detail">
+                            <span>School</span>
+                            <strong>{{ school_name }}</strong>
+                        </div>
+                        <div class="account-detail">
+                            <span>Application</span>
+                            <strong>{{ app_name }}</strong>
+                        </div>
+                    </div>
+                    <p class="account-security-note mb-0">
+                        <i class="fas fa-lock" aria-hidden="true"></i>
+                        Your access is managed by your account role.
+                    </p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-0">
+        <div class="col-lg-6">
+            <section class="card settings-card h-100" aria-labelledby="securitySettingsHeading">
+                <div class="card-body p-4">
+                    <h2 id="securitySettingsHeading" class="h5">Account security</h2>
+                    <p>Email status:
+                        {% if current_user.email_verified %}
+                        <span class="badge text-bg-success">Verified</span>
+                        {% else %}
+                        <span class="badge text-bg-warning">Not verified</span>
+                        {% endif %}
+                    </p>
+                    <form method="post" action="{{ url_for('update_account_email') }}" class="mb-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <label for="accountEmail" class="form-label">Account recovery email</label>
+                        <input id="accountEmail" name="email" type="email" class="form-control mb-2" maxlength="120" value="{{ current_user.email or '' }}" required>
+                        <label for="emailPassword" class="form-label">Current password</label>
+                        <input id="emailPassword" name="password" type="password" class="form-control mb-2" autocomplete="current-password" required>
+                        <button class="btn btn-outline-primary" type="submit">Save email</button>
+                    </form>
+                    {% if current_user.email and not current_user.email_verified %}
+                    <form method="post" action="{{ url_for('request_email_verification') }}" class="mb-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-outline-secondary" type="submit">Send verification email</button>
+                    </form>
+                    {% endif %}
+                    <p>Authenticator app: <strong>{{ 'Enabled' if current_user.mfa_enabled else 'Not enabled' }}</strong></p>
+                    <a class="btn btn-outline-primary" href="{{ url_for('mfa_setup') }}">
+                        {{ 'Manage authenticator' if current_user.mfa_enabled else 'Set up authenticator app' }}
+                    </a>
+                    <p class="small text-muted mt-3 mb-0">Password recovery requires a verified email and administrator-configured SMTP delivery.</p>
+                </div>
+            </section>
+        </div>
+        {% if current_user.role == 'Admin' %}
+        <div class="col-lg-6">
+            <section class="card settings-card h-100" aria-labelledby="batchSettingsHeading">
+                <div class="card-body p-4">
+                    <h2 id="batchSettingsHeading" class="h5">Registration batches</h2>
+                    <p class="text-muted">Set the batch choices shown on registration and user forms. Existing account batches are retained.</p>
+                    <label for="batchOptionsEditor" class="form-label">One batch label per line</label>
+                    <textarea id="batchOptionsEditor" class="form-control mb-2" rows="6">{{ batch_options|join('\n') }}</textarea>
+                    <button type="button" class="btn btn-primary" id="saveBatchOptions">Save batches</button>
+                </div>
+            </section>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="row g-4 mt-0 align-items-stretch">
+        <div class="col-lg-7">
+            <section class="card settings-card developer-card h-100" aria-labelledby="developerHeading">
+                <div class="card-body p-4 p-xl-5">
+                    <div class="settings-section-heading">
+                        <span class="settings-icon developer-icon"><i class="fas fa-code" aria-hidden="true"></i></span>
+                        <div>
+                            <p class="settings-card-kicker">Built with care</p>
+                            <h2 id="developerHeading" class="h5 mb-1">Developer</h2>
+                            <p class="text-muted mb-0">Application design and development.</p>
+                        </div>
+                    </div>
+
+                    <div class="developer-profile">
+                        <div class="developer-avatar" aria-hidden="true">KG</div>
+                        <div>
+                            <h3 class="h6 mb-1">Kassaye Gessese Kahante</h3>
+                            <p class="text-muted mb-0">Web Application Developer</p>
+                        </div>
+                    </div>
+                    <address class="developer-contact mb-0">
+                        <a href="tel:0993408171">
+                            <span class="contact-icon"><i class="fas fa-phone" aria-hidden="true"></i></span>
+                            <span><small>Phone</small><strong>0993408171</strong></span>
+                            <i class="fas fa-arrow-up-right-from-square contact-external" aria-hidden="true"></i>
+                        </a>
+                        <a href="mailto:kassayegessese@gmail.com">
+                            <span class="contact-icon"><i class="fas fa-envelope" aria-hidden="true"></i></span>
+                            <span class="contact-address"><small>Email</small><strong>kassayegessese@gmail.com</strong></span>
+                            <i class="fas fa-arrow-up-right-from-square contact-external" aria-hidden="true"></i>
+                        </a>
+                        <div>
+                            <span class="contact-icon"><i class="fas fa-location-dot" aria-hidden="true"></i></span>
+                            <span><small>Location</small><strong>South Ethiopia, Konso Ethiopia</strong></span>
+                        </div>
+                    </address>
+                </div>
+            </section>
+        </div>
+
+        <div class="col-lg-5">
+            <section class="card settings-card acknowledgement-card h-100" aria-labelledby="acknowledgementHeading">
+                <div class="card-body p-4 p-xl-5">
+                    <span class="acknowledgement-art" aria-hidden="true">
+                        <i class="fas fa-hands-holding-circle"></i>
+                    </span>
+                    <p class="settings-card-kicker">With gratitude</p>
+                    <h2 id="acknowledgementHeading" class="h5 mb-3">Acknowledgement</h2>
+                    <p class="text-muted mb-4">
+                        Sincere thanks to the school leadership and staff for their guidance and feedback,
+                        and to the students and families for their trust and support. Their contributions
+                        help make this school management application useful to the school community.
+                    </p>
+                    <div class="acknowledgement-signoff">
+                        <span></span>
+                        <strong>{{ school_name }}</strong>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <section class="settings-overview-section mt-4" aria-labelledby="projectOverviewHeading">
+        <div class="settings-overview-heading">
+            <div>
+                <p class="settings-eyebrow"><i class="fas fa-compass" aria-hidden="true"></i> Project guide</p>
+                <h2 id="projectOverviewHeading">Project overview</h2>
+                <p class="text-muted mb-0">The framework, languages, capabilities, and current limitations of this application.</p>
+            </div>
+        </div>
+
+        <div class="row g-4 mt-1 align-items-stretch">
+            <div class="col-lg-6">
+                <section class="card settings-card overview-card h-100" aria-labelledby="frameworkHeading">
+                    <div class="card-body p-4">
+                        <div class="settings-section-heading mb-3">
+                            <span class="settings-icon framework-icon"><i class="fas fa-layer-group" aria-hidden="true"></i></span>
+                            <div>
+                                <p class="settings-card-kicker">Application stack</p>
+                                <h3 id="frameworkHeading" class="h5 mb-0">Framework, languages &amp; tools</h3>
+                            </div>
+                        </div>
+
+                        <div class="framework-summary">
+                            <span class="framework-python"><i class="fab fa-python" aria-hidden="true"></i></span>
+                            <div>
+                                <strong>Flask web application</strong>
+                                <p class="text-muted small mb-0">Python microframework · server-rendered pages and JSON APIs</p>
+                            </div>
+                        </div>
+
+                        <h4 class="settings-list-heading">Languages &amp; interface</h4>
+                        <div class="settings-tag-list" aria-label="Languages and interface tools">
+                            <span>Python 3.12</span><span>HTML5</span><span>CSS3</span><span>JavaScript</span>
+                            <span>Jinja templates</span><span>Bootstrap 5.3</span><span>Font Awesome 6.5</span><span>Inter</span>
+                        </div>
+
+                        <h4 class="settings-list-heading mt-4">Backend &amp; operations</h4>
+                        <ul class="technology-list">
+                            <li><i class="fas fa-database" aria-hidden="true"></i><span><strong>Data:</strong> Flask-SQLAlchemy ORM; SQLite for local setup; MySQL supported with PyMySQL.</span></li>
+                            <li><i class="fas fa-shield-halved" aria-hidden="true"></i><span><strong>Identity &amp; protection:</strong> Flask-Login, Werkzeug password hashing, Flask-WTF CSRF protection, Flask-Limiter rate limits.</span></li>
+                            <li><i class="fas fa-server" aria-hidden="true"></i><span><strong>Deployment:</strong> Waitress WSGI server; Redis can provide shared production rate-limit storage.</span></li>
+                            <li><i class="fas fa-vial" aria-hidden="true"></i><span><strong>Testing:</strong> Python unittest test suite.</span></li>
+                        </ul>
+
+                        <h4 class="settings-list-heading mt-4">Application modules</h4>
+                        <div class="settings-tag-list settings-module-tags" aria-label="Application modules">
+                            <span>Students</span><span>Teachers</span><span>Attendance</span><span>Exams</span>
+                            <span>Subjects / Classes</span><span>Library</span><span>Finance</span><span>Reports</span><span>User management</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="col-lg-6">
+                <section class="card settings-card overview-card h-100" aria-labelledby="rolesHeading">
+                    <div class="card-body p-4">
+                        <div class="settings-section-heading mb-3">
+                            <span class="settings-icon roles-icon"><i class="fas fa-user-lock" aria-hidden="true"></i></span>
+                            <div>
+                                <p class="settings-card-kicker">Access control</p>
+                                <h3 id="rolesHeading" class="h5 mb-0">Roles &amp; permissions</h3>
+                            </div>
+                        </div>
+
+                        <div class="role-access-list">
+                            <article class="role-access-item">
+                                <span class="role-access-icon role-admin"><i class="fas fa-user-shield" aria-hidden="true"></i></span>
+                                <div><h4>Administrator</h4><p>Manages all school modules, accounts, approvals, and reports.</p></div>
+                                <span class="role-access-label">Full access</span>
+                            </article>
+                            <article class="role-access-item">
+                                <span class="role-access-icon role-teacher"><i class="fas fa-chalkboard-user" aria-hidden="true"></i></span>
+                                <div><h4>Teacher</h4><p>Uses the teaching dashboard and attendance tools with limited student roster access.</p></div>
+                                <span class="role-access-label">Teaching</span>
+                            </article>
+                            <article class="role-access-item">
+                                <span class="role-access-icon role-student"><i class="fas fa-user-graduate" aria-hidden="true"></i></span>
+                                <div><h4>Student</h4><p>Views their own attendance and examination results.</p></div>
+                                <span class="role-access-label">Personal</span>
+                            </article>
+                            <article class="role-access-item">
+                                <span class="role-access-icon role-parent"><i class="fas fa-people-roof" aria-hidden="true"></i></span>
+                                <div><h4>Parent</h4><p>Can view attendance and examination records only for students linked by an administrator.</p></div>
+                                <span class="role-access-label">Linked records</span>
+                            </article>
+                        </div>
+                        <p class="role-approval-note mb-0"><i class="fas fa-circle-info" aria-hidden="true"></i> Public Student, Administrator, and Teacher registrations need approval before sign-in.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <section class="card settings-card limitations-card mt-4" aria-labelledby="limitationsHeading">
+            <div class="card-body p-4 p-xl-5">
+                <div class="settings-section-heading mb-4">
+                    <span class="settings-icon limitations-icon"><i class="fas fa-list-check" aria-hidden="true"></i></span>
+                    <div>
+                        <p class="settings-card-kicker">Roadmap delivery</p>
+                        <h3 id="limitationsHeading" class="h5 mb-1">Capabilities and remaining setup</h3>
+                        <p class="text-muted mb-0">Implemented workflows and deployment prerequisites; this is not a complete security audit.</p>
+                    </div>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6 col-xl-4">
+                        <article class="limitation-item">
+                            <span class="limitation-number">01</span>
+                            <div><h4>Parent-to-student links · implemented</h4><p>Administrators manage links in User Management. Parents see linked attendance and exam records; fee information remains restricted.</p></div>
+                        </article>
+                    </div>
+                    <div class="col-md-6 col-xl-4">
+                        <article class="limitation-item">
+                            <span class="limitation-number">02</span>
+                            <div><h4>News publishing · implemented</h4><p>Administrators can save drafts, publish, unpublish, edit, and delete announcements in News Management.</p></div>
+                        </article>
+                    </div>
+                    <div class="col-md-6 col-xl-4">
+                        <article class="limitation-item">
+                            <span class="limitation-number">03</span>
+                            <div><h4>Class management · implemented</h4><p>Classes are stored as grade-and-section records and linked to students. Existing student groups are migrated during database initialization.</p></div>
+                        </article>
+                    </div>
+                    <div class="col-md-6 col-xl-4">
+                        <article class="limitation-item">
+                            <span class="limitation-number">04</span>
+                            <div><h4>Student sign-up verification · strengthened</h4><p>Student ID and date of birth are checked, then an administrator must approve access. This is manual school verification, not government-ID or third-party identity proof.</p></div>
+                        </article>
+                    </div>
+                    <div class="col-md-6 col-xl-4">
+                        <article class="limitation-item">
+                            <span class="limitation-number">05</span>
+                            <div><h4>Configurable batches · implemented</h4><p>Administrators can manage registration batch choices in Settings; existing account batch values are preserved.</p></div>
+                        </article>
+                    </div>
+                    <div class="col-md-6 col-xl-4">
+                        <article class="limitation-item">
+                            <span class="limitation-number">06</span>
+                            <div><h4>Demo credentials · development only</h4><p>The requested demo account remains restricted to localhost development. Production initialization requires a strong administrator password.</p></div>
+                        </article>
+                    </div>
+                    <div class="col-md-6 col-xl-4">
+                        <article class="limitation-item">
+                            <span class="limitation-number">07</span>
+                            <div><h4>Recovery &amp; multi-factor sign-in · implemented</h4><p>Time-limited verified-email password reset and authenticator-app MFA are available. Configure SMTP with TLS/SSL before enabling email delivery in a deployment.</p></div>
+                        </article>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </section>
+
+    <footer class="settings-footer">
+        <img src="{{ url_for('static', filename='images/aylota-logo.png') }}" alt="">
+        <span>{{ app_name }} <span aria-hidden="true">·</span> {{ school_name }}</span>
+        <span class="settings-footer-separator" aria-hidden="true"></span>
+        <span>Workspace preferences</span>
+    </footer>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if current_user.role == 'Admin' %}
+<script>
+    document.getElementById('saveBatchOptions').addEventListener('click', async () => {
+        const batches = document.getElementById('batchOptionsEditor').value
+            .split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+        try {
+            await fetchJson('/api/settings/batches', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ batches }),
+            });
+            showToast('Registration batches saved', 'success');
+        } catch (error) {
+            showRequestError(error, 'Could not save registration batches');
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <button type="button" class="btn btn-outline-primary w-100" onclick="loadReport('students')">
+            <i class="fas fa-user-graduate me-2"></i>Student Report
+        </button>
+    </div>
+    <div class="col-md-3">
+        <button type="button" class="btn btn-outline-success w-100" onclick="loadReport('attendance')">
+            <i class="fas fa-calendar-check me-2"></i>Attendance Report
+        </button>
+    </div>
+    <div class="col-md-3">
+        <button type="button" class="btn btn-outline-info w-100" onclick="loadReport('exams')">
+            <i class="fas fa-pencil-alt me-2"></i>Exam Report
+        </button>
+    </div>
+    {% if current_user.role == 'Admin' %}
+    <div class="col-md-3">
+        <button type="button" class="btn btn-outline-warning w-100" onclick="loadReport('finance')">
+            <i class="fas fa-coins me-2"></i>Finance Report
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<div class="d-flex align-items-center gap-2 mb-3">
+    <label for="reportSemester" class="form-label mb-0">Academic semester</label>
+    <select id="reportSemester" class="form-select form-select-sm" style="width:190px;">
+        <option value="one">Semester One</option>
+        <option value="two">Semester Two</option>
+        <option value="three">Semester Three</option>
+    </select>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h2 class="h6 mb-0" id="reportTitle">Select a report above</h2>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+            <i class="fas fa-print"></i> Print
+        </button>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="reportTable">
+            <thead class="table-light"><tr><th scope="col">No data</th></tr></thead>
+            <tbody><tr><td class="text-center text-muted py-4">Select a report to view results.</td></tr></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const reportTitles = {
+        students: 'Student Report',
+        attendance: 'Attendance Report',
+        exams: 'Exam Report',
+        finance: 'Finance Report'
+    };
+    const semesterLabels = {
+        one: 'Semester One',
+        two: 'Semester Two',
+        three: 'Semester Three'
+    };
+    let activeReport = null;
+
+    async function loadReport(type) {
+        activeReport = type;
+        const semester = document.getElementById('reportSemester').value;
+        const academic = type !== 'finance';
+        document.getElementById('reportTitle').textContent =
+            reportTitles[type] + (academic ? ` · ${semesterLabels[semester]}` : '');
+
+        const query = academic ? `?semester=${encodeURIComponent(semester)}` : '';
+        const table = document.getElementById('reportTable');
+        const thead = table.querySelector('thead');
+        const tbody = table.querySelector('tbody');
+        tbody.innerHTML = '<tr><td class="text-center text-muted py-4">Loading report...</td></tr>';
+        try {
+            const data = await fetchJson(`/api/reports/${type}${query}`);
+            if (!Array.isArray(data)) {
+                throw new Error('The report response is not in the expected format.');
+            }
+            if (!data.length) {
+                thead.innerHTML = '<tr><th scope="col">No data</th></tr>';
+                tbody.innerHTML = '<tr><td class="text-center text-muted py-4">No records found for this report and semester.</td></tr>';
+                return;
+            }
+
+            const headers = Object.keys(data[0]);
+            thead.innerHTML = '<tr>' + headers.map(header =>
+                `<th scope="col">${escapeHtml(header.replace(/_/g, ' ').toUpperCase())}</th>`
+            ).join('') + '</tr>';
+
+            tbody.innerHTML = data.map(row =>
+                '<tr>' + headers.map(header => {
+                    let value = row[header];
+                    if (typeof value === 'number') value = value.toFixed(2);
+                    return `<td>${escapeHtml(value ?? '-')}</td>`;
+                }).join('') + '</tr>'
+            ).join('');
+        } catch (error) {
+            thead.innerHTML = '<tr><th scope="col">Report unavailable</th></tr>';
+            tbody.innerHTML = '<tr><td class="text-center text-danger py-4">Could not generate this report. Check your connection and try again.</td></tr>';
+            showRequestError(error, 'Could not generate report');
+        }
+    }
+
+    document.getElementById('reportSemester').addEventListener('change', () => {
+        if (activeReport) loadReport(activeReport);
+    });
+</script>
+{% endblock %}

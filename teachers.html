@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Teachers{% endblock %}
+{% block page_title %}Teachers{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h6 mb-3" id="teacherFormHeading"><i class="fas fa-user-plus me-2"></i>Add Teacher</h2>
+        <form id="teacherForm">
+            <input type="hidden" id="teacherId">
+            <div class="row g-2">
+                <div class="col-md-3"><label class="visually-hidden" for="tName">Teacher name</label><input class="form-control form-control-sm" id="tName" placeholder="Full name *" required maxlength="100"></div>
+                <div class="col-md-2"><label class="visually-hidden" for="tDept">Department</label><input class="form-control form-control-sm" id="tDept" placeholder="Department" maxlength="50"></div>
+                <div class="col-md-2"><label class="visually-hidden" for="tPhone">Phone</label><input class="form-control form-control-sm" id="tPhone" placeholder="Phone" maxlength="20"></div>
+                <div class="col-md-3"><label class="visually-hidden" for="tEmail">Email</label><input class="form-control form-control-sm" id="tEmail" type="email" placeholder="Email" maxlength="120"></div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button class="btn btn-primary btn-sm flex-fill" id="saveTeacher">Save</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="cancelTeacherEdit" hidden>Cancel</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+        <h2 class="h6 mb-0"><i class="fas fa-list me-2"></i>Teacher List</h2>
+        <label class="visually-hidden" for="teacherSearch">Search teachers</label>
+        <input type="search" id="teacherSearch" class="form-control form-control-sm teacher-search"
+               placeholder="Search by name, subject, phone" aria-label="Search teachers by name, subject, or phone">
+    </div>
+    <p class="small text-muted px-3 pt-2 mb-0">Employment status is not currently tracked for teacher records.</p>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Teacher ID</th><th scope="col">Name</th>
+                    <th scope="col">Subject</th><th scope="col">Phone</th>
+                    <th scope="col">Status</th><th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="teachersTable">
+                <tr><td colspan="6" class="text-center text-muted py-4">Loading teachers...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let teachers = [];
+
+    async function loadTeachers() {
+        const tbody = document.getElementById('teachersTable');
+        try {
+            teachers = await fetchJson('/api/teachers');
+            renderTeachers();
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">Could not load teachers. Check your connection and retry.</td></tr>';
+            showRequestError(error, 'Could not load teachers');
+        }
+    }
+
+    function renderTeachers() {
+        const query = document.getElementById('teacherSearch').value.trim().toLowerCase();
+        const matchingTeachers = teachers.filter(teacher => [
+            teacher.teacher_id,
+            teacher.name,
+            teacher.department,
+            teacher.phone,
+            teacher.email,
+            ...(teacher.subjects || []),
+        ].some(value => String(value || '').toLowerCase().includes(query)));
+        const tbody = document.getElementById('teachersTable');
+        if (!matchingTeachers.length) {
+            const message = teachers.length ? 'No teachers match your search.' : 'No teachers yet.';
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">${message}</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = matchingTeachers.map(teacher => `
+            <tr>
+                <td>${teacher.teacher_id}</td>
+                <td>${escapeHtml(teacher.name)}</td>
+                <td>${escapeHtml((teacher.subjects || []).join(', ') || teacher.department || '—')}</td>
+                <td>${escapeHtml(teacher.phone || '—')}</td>
+                <td><span class="badge text-bg-secondary">Not tracked</span></td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-primary" aria-label="Edit ${escapeHtml(teacher.name)}"
+                            onclick="editTeacher(${teacher.teacher_id})">
+                        <i class="fas fa-edit" aria-hidden="true"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" aria-label="Delete ${escapeHtml(teacher.name)}"
+                            onclick="deleteTeacher(${teacher.teacher_id})">
+                        <i class="fas fa-trash" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function editTeacher(id) {
+        const teacher = teachers.find(item => item.teacher_id === id);
+        if (!teacher) {
+            showToast('This teacher is no longer in the current list. Refresh and try again.', 'warning');
+            return;
+        }
+        document.getElementById('teacherId').value = teacher.teacher_id;
+        document.getElementById('tName').value = teacher.name || '';
+        document.getElementById('tDept').value = teacher.department || '';
+        document.getElementById('tPhone').value = teacher.phone || '';
+        document.getElementById('tEmail').value = teacher.email || '';
+        document.getElementById('teacherFormHeading').innerHTML =
+            '<i class="fas fa-user-edit me-2" aria-hidden="true"></i>Edit Teacher';
+        document.getElementById('saveTeacher').textContent = 'Update';
+        document.getElementById('cancelTeacherEdit').hidden = false;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        document.getElementById('tName').focus();
+    }
+
+    function resetTeacherForm() {
+        document.getElementById('teacherForm').reset();
+        document.getElementById('teacherId').value = '';
+        document.getElementById('teacherFormHeading').innerHTML =
+            '<i class="fas fa-user-plus me-2" aria-hidden="true"></i>Add Teacher';
+        document.getElementById('saveTeacher').textContent = 'Save';
+        document.getElementById('cancelTeacherEdit').hidden = true;
+    }
+
+    document.getElementById('teacherForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        const id = document.getElementById('teacherId').value;
+        const data = {
+            name: document.getElementById('tName').value,
+            department: document.getElementById('tDept').value,
+            phone: document.getElementById('tPhone').value,
+            email: document.getElementById('tEmail').value,
+        };
+        try {
+            const result = await fetchJson(id ? `/api/teachers/${id}` : '/api/teachers', {
+                method: id ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            if (!result.success) throw new Error(result.message || 'Teacher changes were not saved.');
+            showToast(id ? 'Teacher updated successfully' : 'Teacher added successfully', 'success');
+            resetTeacherForm();
+            await loadTeachers();
+        } catch (error) {
+            showRequestError(error, id ? 'Could not update teacher' : 'Could not add teacher');
+        }
+    });
+
+    async function deleteTeacher(id) {
+        const teacher = teachers.find(item => item.teacher_id === id);
+        if (!confirmAction(`Delete ${teacher ? teacher.name : 'this teacher'}?`)) return;
+        try {
+            const result = await fetchJson(`/api/teachers/${id}`, { method: 'DELETE' });
+            if (!result.success) throw new Error(result.message || 'The teacher was not deleted.');
+            showToast('Teacher deleted', 'success');
+            await loadTeachers();
+        } catch (error) {
+            showRequestError(error, 'Could not delete teacher');
+        }
+    }
+
+    document.getElementById('teacherSearch').addEventListener('input', renderTeachers);
+    document.getElementById('cancelTeacherEdit').addEventListener('click', resetTeacherForm);
+    loadTeachers();
+</script>
+{% endblock %}

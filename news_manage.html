@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}News publishing{% endblock %}
+{% block page_title %}News publishing{% endblock %}
+
+{% block content %}
+<section class="card shadow-sm mb-4" aria-labelledby="newsFormHeading">
+    <div class="card-body">
+        <h1 class="h5" id="newsFormHeading">Create announcement</h1>
+        <form id="newsForm">
+            <input type="hidden" id="newsId">
+            <div class="mb-3">
+                <label for="newsTitle" class="form-label">Title</label>
+                <input id="newsTitle" class="form-control" maxlength="160" required>
+            </div>
+            <div class="mb-3">
+                <label for="newsBody" class="form-label">Announcement</label>
+                <textarea id="newsBody" class="form-control" rows="6" maxlength="10000" required></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" id="saveNewsButton" type="submit">Save draft</button>
+                <button class="btn btn-outline-secondary" id="cancelNewsEdit" type="button" hidden>Cancel</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="card shadow-sm" aria-labelledby="newsListHeading">
+    <div class="card-header bg-white"><h2 class="h6 mb-0" id="newsListHeading">Announcements</h2></div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>Title</th><th>Status</th><th>Published</th><th>Actions</th></tr></thead>
+            <tbody id="newsTable"><tr><td colspan="4" class="text-center text-muted">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let newsItems = [];
+    async function loadNews() {
+        const tbody = document.getElementById('newsTable');
+        try {
+            newsItems = await fetchJson('/api/news');
+            if (!newsItems.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No announcements yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = newsItems.map(item => `
+                <tr>
+                    <td>${escapeHtml(item.title)}</td>
+                    <td><span class="badge ${item.status === 'published' ? 'text-bg-success' : 'text-bg-secondary'}">${escapeHtml(item.status)}</span></td>
+                    <td>${item.published_at ? escapeHtml(new Date(item.published_at).toLocaleString()) : '—'}</td>
+                    <td class="d-flex flex-wrap gap-1">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editNews(${item.id})">Edit</button>
+                        <button class="btn btn-sm btn-outline-${item.status === 'published' ? 'warning' : 'success'}" onclick="toggleNews(${item.id})">${item.status === 'published' ? 'Unpublish' : 'Publish'}</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteNews(${item.id})">Delete</button>
+                    </td>
+                </tr>`).join('');
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Could not load announcements.</td></tr>';
+            showRequestError(error, 'Could not load announcements');
+        }
+    }
+
+    function resetNewsForm() {
+        document.getElementById('newsForm').reset();
+        document.getElementById('newsId').value = '';
+        document.getElementById('saveNewsButton').textContent = 'Save draft';
+        document.getElementById('cancelNewsEdit').hidden = true;
+    }
+
+    function editNews(id) {
+        const item = newsItems.find(value => value.id === id);
+        if (!item) return;
+        document.getElementById('newsId').value = item.id;
+        document.getElementById('newsTitle').value = item.title;
+        document.getElementById('newsBody').value = item.body;
+        document.getElementById('saveNewsButton').textContent = 'Save changes';
+        document.getElementById('cancelNewsEdit').hidden = false;
+        document.getElementById('newsFormHeading').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function toggleNews(id) {
+        const item = newsItems.find(value => value.id === id);
+        if (!item) return;
+        try {
+            await fetchJson(`/api/news/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: item.status === 'published' ? 'draft' : 'published' }),
+            });
+            showToast('Announcement status updated', 'success');
+            await loadNews();
+        } catch (error) {
+            showRequestError(error, 'Could not update announcement');
+        }
+    }
+
+    async function deleteNews(id) {
+        if (!confirm('Delete this announcement?')) return;
+        try {
+            await fetchJson(`/api/news/${id}`, { method: 'DELETE' });
+            showToast('Announcement deleted', 'success');
+            await loadNews();
+        } catch (error) {
+            showRequestError(error, 'Could not delete announcement');
+        }
+    }
+
+    document.getElementById('newsForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        const id = document.getElementById('newsId').value;
+        const payload = {
+            title: document.getElementById('newsTitle').value,
+            body: document.getElementById('newsBody').value,
+        };
+        try {
+            await fetchJson(id ? `/api/news/${id}` : '/api/news', {
+                method: id ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            showToast(id ? 'Announcement saved' : 'Draft saved', 'success');
+            resetNewsForm();
+            await loadNews();
+        } catch (error) {
+            showRequestError(error, 'Could not save announcement');
+        }
+    });
+    document.getElementById('cancelNewsEdit').addEventListener('click', resetNewsForm);
+    loadNews();
+</script>
+{% endblock %}

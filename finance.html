@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Finance{% endblock %}
+{% block page_title %}Finance Management{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h6 class="mb-3"><i class="fas fa-coins me-2"></i>Record Fee</h6>
+        <form id="feeForm">
+            <div class="row g-2">
+                <div class="col-md-3"><select class="form-select form-select-sm" id="feeStudent" required><option value="">Student</option></select></div>
+                <div class="col-md-2"><input type="number" class="form-control form-control-sm" id="feeAmount" placeholder="Amount" step="0.01" required></div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="feeStatus">
+                        <option value="paid">Paid</option>
+                        <option value="unpaid">Unpaid</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="feeType">
+                        <option>Tuition</option>
+                        <option>Library</option>
+                        <option>Transport</option>
+                        <option>Uniform</option>
+                        <option>Other</option>
+                    </select>
+                </div>
+                <div class="col-md-3"><button class="btn btn-primary btn-sm w-100">Save</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white"><h6 class="mb-0"><i class="fas fa-list me-2"></i>Fee Records</h6></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th>ID</th><th>Student</th><th>Amount</th><th>Type</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="feesTable"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    fetch('/api/students').then(r => r.json()).then(students => {
+        const sel = document.getElementById('feeStudent');
+        students.forEach(s => sel.insertAdjacentHTML('beforeend', `<option value="${s.student_id}">${escapeHtml(s.full_name)}</option>`));
+    });
+
+    async function loadFees() {
+        const res = await fetch('/api/fees');
+        const fees = await res.json();
+        const tbody = document.getElementById('feesTable');
+        if (!fees.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No fee records.</td></tr>';
+            return;
+        }
+        const statusClass = { paid: 'success', unpaid: 'danger', pending: 'warning' };
+        tbody.innerHTML = fees.map(f => `
+            <tr>
+                <td>${f.fee_id}</td>
+                <td>${escapeHtml(f.student_name)}</td>
+                <td>$${f.amount.toFixed(2)}</td>
+                <td>${escapeHtml(f.fee_type || '-')}</td>
+                <td><span class="badge bg-${statusClass[f.status] || 'secondary'}">${escapeHtml(f.status)}</span></td>
+                <td>${escapeHtml(f.date)}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-success" onclick="markPaid(${f.fee_id})" title="Mark Paid">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteFee(${f.fee_id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    document.getElementById('feeForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = {
+            student_id: parseInt(document.getElementById('feeStudent').value),
+            amount: parseFloat(document.getElementById('feeAmount').value),
+            status: document.getElementById('feeStatus').value,
+            fee_type: document.getElementById('feeType').value,
+            date: new Date().toISOString().slice(0, 10),
+        };
+        const res = await fetch('/api/fees', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.success) {
+            showToast('Fee recorded', 'success');
+            e.target.reset();
+            loadFees();
+        } else {
+            showToast(result.message, 'danger');
+        }
+    });
+
+    async function markPaid(id) {
+        await fetch(`/api/fees/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'paid' })
+        });
+        showToast('Marked as paid', 'success');
+        loadFees();
+    }
+
+    async function deleteFee(id) {
+        if (!confirm('Delete this fee record?')) return;
+        await fetch(`/api/fees/${id}`, { method: 'DELETE' });
+        loadFees();
+    }
+
+    loadFees();
+</script>
+{% endblock %}

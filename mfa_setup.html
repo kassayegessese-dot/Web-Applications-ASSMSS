@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Authenticator setup{% endblock %}
+{% block page_title %}Authenticator setup{% endblock %}
+{% block content %}
+<section class="card shadow-sm">
+    <div class="card-body p-4">
+        <h1 class="h4">Authenticator app</h1>
+        {% if enabled %}
+        <p>Authenticator verification is enabled for your account.</p>
+        <form method="post" action="{{ url_for('mfa_disable') }}" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-md-5"><label class="form-label" for="password">Current password</label><input id="password" name="password" type="password" class="form-control" autocomplete="current-password" required></div>
+            <div class="col-md-4"><label class="form-label" for="code">Authenticator code</label><input id="code" name="code" class="form-control" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></div>
+            <div class="col-md-3 d-flex align-items-end"><button class="btn btn-outline-danger" type="submit">Disable MFA</button></div>
+        </form>
+        {% elif needs_password %}
+        <p>Confirm your current password before enrolling an authenticator app.</p>
+        <form method="post" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-sm-6"><label class="form-label" for="password">Current password</label><input id="password" name="password" type="password" class="form-control" autocomplete="current-password" required></div>
+            <div class="col-sm-4 d-flex align-items-end"><button class="btn btn-primary" type="submit">Continue setup</button></div>
+        </form>
+        {% else %}
+        <p>Add a new account in your authenticator application using the secret below, then confirm with its current six-digit code.</p>
+        <p><strong>Setup key:</strong> <code>{{ secret }}</code></p>
+        <p class="small text-muted">Keep this key private. It grants access to your sign-in codes.</p>
+        <p><a href="{{ provisioning_uri }}">{{ provisioning_uri }}</a></p>
+        <details class="mb-3">
+            <summary>Setup key exposed or authenticator entry incorrect?</summary>
+            <p class="small text-muted mt-2">Generate a new key to invalidate this one. You will need to add the new key to your authenticator app.</p>
+            <form method="post" action="{{ url_for('mfa_setup_restart') }}" class="row g-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-sm-6">
+                    <label class="form-label" for="restartPassword">Current password</label>
+                    <input id="restartPassword" name="password" type="password" class="form-control" autocomplete="current-password" required>
+                </div>
+                <div class="col-sm-4 d-flex align-items-end">
+                    <button class="btn btn-outline-danger" type="submit">Generate a new key</button>
+                </div>
+            </form>
+        </details>
+        <form method="post" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-sm-6"><label class="form-label" for="code">Authenticator code</label><input id="code" name="code" class="form-control" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></div>
+            <div class="col-sm-4 d-flex align-items-end"><button class="btn btn-primary" type="submit">Confirm and enable</button></div>
+        </form>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Examinations{% endblock %}
+{% block page_title %}Examination Management{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h6 mb-3"><i class="fas fa-pencil-alt me-2"></i>Enter Exam Marks</h2>
+        <form id="examForm">
+            <div class="row g-2">
+                <div class="col-md-3"><select class="form-select form-select-sm" id="examStudent" required><option value="">Student</option></select></div>
+                <div class="col-md-3"><select class="form-select form-select-sm" id="examSubject" required><option value="">Subject</option></select></div>
+                <div class="col-md-2"><input type="number" class="form-control form-control-sm" id="examScore" placeholder="Score" min="0" max="100" required></div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="examSemester" required>
+                        <option value="one">Semester One</option>
+                        <option value="two">Semester Two</option>
+                        <option value="three">Semester Three</option>
+                    </select>
+                </div>
+                <div class="col-md-2"><button class="btn btn-primary btn-sm w-100">Save</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h2 class="h6 mb-0"><i class="fas fa-list me-2"></i>Results</h2>
+        <select id="filterSemester" class="form-select form-select-sm" aria-label="Filter by semester" style="width:180px;">
+            <option value="">All semesters</option>
+            <option value="one">Semester One</option>
+            <option value="two">Semester Two</option>
+            <option value="three">Semester Three</option>
+        </select>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th scope="col">ID</th><th scope="col">Student</th><th scope="col">Subject</th><th scope="col">Score</th><th scope="col">Semester</th><th scope="col">Actions</th></tr>
+            </thead>
+            <tbody id="examsTable"><tr><td colspan="6" class="text-center text-muted py-4">Loading examination results...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadExamOptions() {
+        try {
+            const [students, subjects] = await Promise.all([
+                fetchJson('/api/students'),
+                fetchJson('/api/subjects'),
+            ]);
+            const studentSelect = document.getElementById('examStudent');
+            students.forEach(student => {
+                const option = document.createElement('option');
+                option.value = student.student_id;
+                option.textContent = student.full_name;
+                studentSelect.appendChild(option);
+            });
+            const subjectSelect = document.getElementById('examSubject');
+            subjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject.subject_id;
+                option.textContent = subject.subject_name;
+                subjectSelect.appendChild(option);
+            });
+            if (!students.length || !subjects.length) {
+                document.getElementById('examForm').querySelector('button[type="submit"]').disabled = true;
+                showToast('Add at least one student and one subject before entering marks.', 'warning');
+            }
+        } catch (error) {
+            document.getElementById('examForm').querySelector('button[type="submit"]').disabled = true;
+            showRequestError(error, 'Could not load students and subjects');
+        }
+    }
+
+    async function loadExams() {
+        const semester = document.getElementById('filterSemester').value;
+        const tbody = document.getElementById('examsTable');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Loading examination results...</td></tr>';
+        try {
+            const exams = await fetchJson('/api/exams' + (semester ? `?semester=${encodeURIComponent(semester)}` : ''));
+            if (!exams.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No exam results found for this semester.</td></tr>';
+                return;
+            }
+            const semesterLabels = {
+                one: 'Semester One', two: 'Semester Two', three: 'Semester Three'
+            };
+            tbody.innerHTML = exams.map(exam => `
+                <tr>
+                    <td>${exam.exam_id}</td>
+                    <td>${escapeHtml(exam.student_name)}</td>
+                    <td>${escapeHtml(exam.subject_name)}</td>
+                    <td><span class="badge text-bg-primary">${escapeHtml(exam.score)}</span></td>
+                    <td>${escapeHtml(semesterLabels[exam.semester] || exam.semester)}</td>
+                    <td><button type="button" class="btn btn-sm btn-outline-danger" aria-label="Delete result ${exam.exam_id}" onclick="deleteExam(${exam.exam_id})"><i class="fas fa-trash" aria-hidden="true"></i></button></td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">Could not load results. Check your connection and retry.</td></tr>';
+            showRequestError(error, 'Could not load exam results');
+        }
+    }
+
+    document.getElementById('examForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = {
+            student_id: parseInt(document.getElementById('examStudent').value),
+            subject_id: parseInt(document.getElementById('examSubject').value),
+            score: parseFloat(document.getElementById('examScore').value),
+            semester: document.getElementById('examSemester').value,
+        };
+        try {
+            const result = await fetchJson('/api/exams', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!result.success) throw new Error(result.message || 'Exam marks were not saved.');
+            showToast('Exam saved', 'success');
+            e.target.reset();
+            await loadExams();
+        } catch (error) {
+            showRequestError(error, 'Could not save exam marks');
+        }
+    });
+
+    async function deleteExam(id) {
+        if (!confirmAction('Delete this exam result?')) return;
+        try {
+            const result = await fetchJson(`/api/exams/${id}`, { method: 'DELETE' });
+            if (!result.success) throw new Error(result.message || 'The exam result was not deleted.');
+            showToast('Exam result deleted', 'success');
+            await loadExams();
+        } catch (error) {
+            showRequestError(error, 'Could not delete exam result');
+        }
+    }
+
+    document.getElementById('filterSemester').addEventListener('change', loadExams);
+    loadExamOptions();
+    loadExams();
+</script>
+{% endblock %}

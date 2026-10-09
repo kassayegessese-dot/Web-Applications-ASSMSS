@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Classes{% endblock %}
+{% block page_title %}Classes{% endblock %}
+
+{% block content %}
+<section aria-labelledby="gradeGroupsHeading">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-2 mb-3">
+        <div>
+            <h2 id="gradeGroupsHeading" class="h5 mb-1">Grade and section groups</h2>
+            <p class="text-muted small mb-0">Manage grade and section classes below. Group cards include enrolled students and available sections.</p>
+        </div>
+    </div>
+    <div class="row g-3" id="gradeGroups" data-default-grades='{{ default_grade_groups|tojson }}'>
+        <div class="col-12"><p class="text-muted">Loading student groups...</p></div>
+    </div>
+</section>
+
+<section class="card shadow-sm mt-4" aria-labelledby="classManagementHeading">
+    <div class="card-header bg-white"><h2 id="classManagementHeading" class="h6 mb-0">Manage sections</h2></div>
+    <div class="card-body">
+        <form id="classForm" class="row g-2 align-items-end">
+            <input type="hidden" id="classId">
+            <div class="col-sm-3">
+                <label for="classGrade" class="form-label">Grade</label>
+                <select id="classGrade" class="form-select" required>
+                    <option value="">Choose grade</option>
+                    {% for grade in ('9', '10', '11', '12') %}
+                    <option value="{{ grade }}">Grade {{ grade }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-3">
+                <label for="classSection" class="form-label">Section</label>
+                <input id="classSection" class="form-control" maxlength="10" required placeholder="e.g. A">
+            </div>
+            <div class="col-sm-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="saveClassButton">Add section</button>
+                <button type="button" class="btn btn-outline-secondary" id="cancelClassEdit" hidden>Cancel</button>
+            </div>
+        </form>
+        <div class="table-responsive mt-3">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Grade</th><th>Section</th><th>Students</th><th>Actions</th></tr></thead>
+                <tbody id="classesTable"><tr><td colspan="4" class="text-muted text-center">Loading sections...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section class="card shadow-sm mt-4" aria-labelledby="subjectsHeading">
+    <div class="card-header bg-white"><h2 id="subjectsHeading" class="h6 mb-0"><i class="fas fa-book me-2" aria-hidden="true"></i>Subjects</h2></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th scope="col">ID</th><th scope="col">Subject</th><th scope="col">Code</th><th scope="col">Teacher</th><th scope="col">Grade</th></tr>
+            </thead>
+            <tbody id="subjectsTable"><tr><td colspan="5" class="text-center text-muted py-4">Loading subjects...</td></tr></tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadGradeGroups() {
+        const container = document.getElementById('gradeGroups');
+        try {
+            const [students, schoolClasses] = await Promise.all([
+                fetchJson('/api/students'),
+                fetchJson('/api/classes'),
+            ]);
+            const groups = new Map(
+                JSON.parse(container.dataset.defaultGrades).map(grade => [
+                    grade,
+                    { count: 0, sections: new Set() }
+                ])
+            );
+            students.forEach(student => {
+                const grade = student.grade || 'Unassigned';
+                if (!groups.has(grade)) groups.set(grade, { count: 0, sections: new Set() });
+                const group = groups.get(grade);
+                group.count += 1;
+                if (student.section) group.sections.add(student.section);
+            });
+            schoolClasses.forEach(schoolClass => {
+                if (!groups.has(schoolClass.grade)) {
+                    groups.set(schoolClass.grade, { count: 0, sections: new Set() });
+                }
+                groups.get(schoolClass.grade).sections.add(schoolClass.section);
+            });
+            if (!groups.size) {
+                container.innerHTML = '<div class="col-12"><p class="text-muted">No student records are available to group.</p></div>';
+                return;
+            }
+            container.innerHTML = [...groups.entries()]
+                .sort(([first], [second]) => first.localeCompare(second, undefined, { numeric: true }))
+                .map(([grade, group]) => {
+                    const sections = [...group.sections]
+                        .sort((first, second) => first.localeCompare(second, undefined, { numeric: true }));
+                    const sectionText = sections.length
+                        ? `Sections: ${sections.map(escapeHtml).join(', ')}`
+                        : 'No sections assigned';
+                    const link = grade === 'Unassigned'
+                        ? '/students'
+                        : `/students?grade=${encodeURIComponent(grade)}`;
+                    return `
+                        <div class="col-sm-6 col-xl-3">
+                            <article class="card shadow-sm h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-layer-group fa-2x text-primary mb-2" aria-hidden="true"></i>
+                                    <h3 class="h5">${grade === 'Unassigned' ? 'Unassigned grade' : `Grade ${escapeHtml(grade)}`}</h3>
+                                    <p class="text-muted small">${group.count} student${group.count === 1 ? '' : 's'} · ${sectionText}</p>
+                                    <a href="${link}" class="btn btn-sm btn-outline-primary">View Students</a>
+                                </div>
+                            </article>
+                        </div>`;
+                }).join('');
+        } catch (error) {
+            container.innerHTML = '<div class="col-12"><p class="text-danger">Could not load student groups. Check your connection and retry.</p></div>';
+            showRequestError(error, 'Could not load student groups');
+        }
+    }
+
+    async function loadSubjects() {
+        const tbody = document.getElementById('subjectsTable');
+        try {
+            const subjects = await fetchJson('/api/subjects');
+            if (!subjects.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No subjects.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = subjects.map(subject => `
+                <tr>
+                    <td>${subject.subject_id}</td>
+                    <td>${escapeHtml(subject.subject_name)}</td>
+                    <td>${escapeHtml(subject.subject_code || '—')}</td>
+                    <td>${escapeHtml(subject.teacher_name || '—')}</td>
+                    <td>${escapeHtml(subject.grade || '—')}</td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Could not load subjects. Check your connection and retry.</td></tr>';
+            showRequestError(error, 'Could not load subjects');
+        }
+    }
+
+    let schoolClasses = [];
+    async function loadClasses() {
+        const tbody = document.getElementById('classesTable');
+        try {
+            schoolClasses = await fetchJson('/api/classes');
+            if (!schoolClasses.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No sections set up yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = schoolClasses.map(item => `
+                <tr>
+                    <td>Grade ${escapeHtml(item.grade)}</td>
+                    <td>${escapeHtml(item.section)}</td>
+                    <td>${item.student_count}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="editClass(${item.id})">Edit</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteClass(${item.id})">Delete</button>
+                    </td>
+                </tr>`).join('');
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Could not load sections.</td></tr>';
+            showRequestError(error, 'Could not load sections');
+        }
+    }
+
+    function resetClassForm() {
+        document.getElementById('classForm').reset();
+        document.getElementById('classId').value = '';
+        document.getElementById('saveClassButton').textContent = 'Add section';
+        document.getElementById('cancelClassEdit').hidden = true;
+    }
+
+    function editClass(id) {
+        const item = schoolClasses.find(entry => entry.id === id);
+        if (!item) return;
+        document.getElementById('classId').value = item.id;
+        document.getElementById('classGrade').value = item.grade;
+        document.getElementById('classSection').value = item.section;
+        document.getElementById('saveClassButton').textContent = 'Save changes';
+        document.getElementById('cancelClassEdit').hidden = false;
+    }
+
+    async function deleteClass(id) {
+        if (!confirm('Delete this section? Students must be moved first.')) return;
+        try {
+            await fetchJson(`/api/classes/${id}`, { method: 'DELETE' });
+            showToast('Section deleted', 'success');
+            await Promise.all([loadClasses(), loadGradeGroups()]);
+        } catch (error) {
+            showRequestError(error, 'Could not delete section');
+        }
+    }
+
+    document.getElementById('classForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        const id = document.getElementById('classId').value;
+        const payload = {
+            grade: document.getElementById('classGrade').value,
+            section: document.getElementById('classSection').value,
+        };
+        try {
+            await fetchJson(id ? `/api/classes/${id}` : '/api/classes', {
+                method: id ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            showToast(id ? 'Section updated' : 'Section added', 'success');
+            resetClassForm();
+            await Promise.all([loadClasses(), loadGradeGroups()]);
+        } catch (error) {
+            showRequestError(error, 'Could not save section');
+        }
+    });
+    document.getElementById('cancelClassEdit').addEventListener('click', resetClassForm);
+
+    loadGradeGroups();
+    loadClasses();
+    loadSubjects();
+</script>
+{% endblock %}

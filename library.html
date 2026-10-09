@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Library{% endblock %}
+{% block page_title %}Library Management{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="mb-3"><i class="fas fa-book-medical me-2"></i>Add Book</h6>
+                <form id="bookForm">
+                    <div class="row g-2">
+                        <div class="col-md-6"><input class="form-control form-control-sm" id="bookTitle" placeholder="Title *" required></div>
+                        <div class="col-md-6"><input class="form-control form-control-sm" id="bookAuthor" placeholder="Author"></div>
+                        <div class="col-md-6"><input class="form-control form-control-sm" id="bookIsbn" placeholder="ISBN"></div>
+                        <div class="col-md-3"><input class="form-control form-control-sm" id="bookCategory" placeholder="Category"></div>
+                        <div class="col-md-3"><input type="number" class="form-control form-control-sm" id="bookQty" value="1" min="1"></div>
+                        <div class="col-12"><button class="btn btn-primary btn-sm w-100">Add Book</button></div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="mb-3"><i class="fas fa-book-reader me-2"></i>Borrow Book</h6>
+                <form id="borrowForm">
+                    <div class="row g-2">
+                        <div class="col-md-6"><select class="form-select form-select-sm" id="borrowBook" required><option value="">Book</option></select></div>
+                        <div class="col-md-6"><select class="form-select form-select-sm" id="borrowStudent" required><option value="">Student</option></select></div>
+                        <div class="col-12"><button class="btn btn-success btn-sm w-100">Borrow</button></div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white"><h6 class="mb-0"><i class="fas fa-book me-2"></i>Books</h6></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th>ID</th><th>Title</th><th>Author</th><th>Category</th><th>Available</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="booksTable"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white"><h6 class="mb-0"><i class="fas fa-history me-2"></i>Borrow Records</h6></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th>ID</th><th>Book</th><th>Student</th><th>Borrowed</th><th>Due</th><th>Status</th><th>Fine</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="borrowsTable"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadBooks() {
+        const res = await fetch('/api/books');
+        const books = await res.json();
+        const tbody = document.getElementById('booksTable');
+        const sel = document.getElementById('borrowBook');
+        sel.innerHTML = '<option value="">Book</option>';
+        if (!books.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No books.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = books.map(b => `
+            <tr>
+                <td>${b.book_id}</td>
+                <td>${escapeHtml(b.title)}</td>
+                <td>${escapeHtml(b.author || '-')}</td>
+                <td>${escapeHtml(b.category || '-')}</td>
+                <td><span class="badge bg-${b.available > 0 ? 'success' : 'danger'}">${b.available}/${b.quantity}</span></td>
+                <td><button class="btn btn-sm btn-outline-danger" onclick="deleteBook(${b.book_id})"><i class="fas fa-trash"></i></button></td>
+            </tr>
+        `).join('');
+        books.forEach(b => {
+            if (b.available > 0) {
+                sel.insertAdjacentHTML('beforeend', `<option value="${b.book_id}">${escapeHtml(b.title)} (${b.available})</option>`);
+            }
+        });
+    }
+
+    async function loadBorrows() {
+        const res = await fetch('/api/borrows');
+        const borrows = await res.json();
+        const tbody = document.getElementById('borrowsTable');
+        if (!borrows.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No borrows.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = borrows.map(b => `
+            <tr>
+                <td>${b.borrow_id}</td>
+                <td>${escapeHtml(b.book_title)}</td>
+                <td>${escapeHtml(b.student_name)}</td>
+                <td>${escapeHtml(b.borrow_date || '-')}</td>
+                <td>${escapeHtml(b.due_date || '-')}</td>
+                <td><span class="badge bg-${b.status === 'returned' ? 'success' : 'warning'}">${escapeHtml(b.status)}</span></td>
+                <td>$${(b.fine || 0).toFixed(2)}</td>
+                <td>${b.status === 'borrowed' ? `<button class="btn btn-sm btn-outline-success" onclick="returnBook(${b.borrow_id})">Return</button>` : ''}</td>
+            </tr>
+        `).join('');
+    }
+
+    fetch('/api/students').then(r => r.json()).then(students => {
+        const sel = document.getElementById('borrowStudent');
+        students.forEach(s => sel.insertAdjacentHTML('beforeend', `<option value="${s.student_id}">${escapeHtml(s.full_name)}</option>`));
+    });
+
+    document.getElementById('bookForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = {
+            title: document.getElementById('bookTitle').value,
+            author: document.getElementById('bookAuthor').value,
+            isbn: document.getElementById('bookIsbn').value,
+            category: document.getElementById('bookCategory').value,
+            quantity: parseInt(document.getElementById('bookQty').value),
+        };
+        const res = await fetch('/api/books', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.success) {
+            showToast('Book added', 'success');
+            e.target.reset();
+            document.getElementById('bookQty').value = 1;
+            loadBooks();
+        } else {
+            showToast(result.message, 'danger');
+        }
+    });
+
+    document.getElementById('borrowForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = {
+            book_id: parseInt(document.getElementById('borrowBook').value),
+            student_id: parseInt(document.getElementById('borrowStudent').value),
+        };
+        const res = await fetch('/api/borrows', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.success) {
+            showToast('Book borrowed', 'success');
+            loadBooks();
+            loadBorrows();
+        } else {
+            showToast(result.message, 'danger');
+        }
+    });
+
+    async function returnBook(id) {
+        const res = await fetch(`/api/borrows/${id}/return`, { method: 'POST' });
+        const result = await res.json();
+        if (result.success) {
+            showToast('Book returned', 'success');
+            loadBooks();
+            loadBorrows();
+        }
+    }
+
+    async function deleteBook(id) {
+        if (!confirm('Delete this book?')) return;
+        const res = await fetch(`/api/books/${id}`, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.success) {
+            showToast('Book deleted', 'success');
+            loadBooks();
+        } else {
+            showToast(result.message || 'Unable to delete book', 'danger');
+        }
+    }
+
+    loadBooks();
+    loadBorrows();
+</script>
+{% endblock %}
